@@ -46,6 +46,9 @@ Homepage = "https://github.com/GitBot/tradingview-webhook-relay"
 Repository = "https://github.com/GitBot/tradingview-webhook-relay"
 Issues = "https://github.com/GitBot/tradingview-webhook-relay/issues"
 
+[tool.hatch.build.targets.wheel]
+packages = ["tv_relay"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-v --tb=short"

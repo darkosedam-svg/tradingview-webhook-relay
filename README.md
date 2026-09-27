@@ -1,5 +1,7 @@
 # tradingview-webhook-relay
 
+[![CI](https://github.com/darkosedam-svg/tradingview-webhook-relay/actions/workflows/ci.yml/badge.svg)](https://github.com/darkosedam-svg/tradingview-webhook-relay/actions/workflows/ci.yml)
+
 Production-grade FastAPI relay that receives TradingView alerts and routes them through configurable risk filters to crypto exchanges.
 
 Built for traders who run TradingView strategies and want them to execute live without trusting random Discord bots or paying $50/month for a black-box copy-trade service.
@@ -199,6 +201,12 @@ pytest tests/
 
 - [`hyperliquid-execution-toolkit`](https://github.com/GitBot/hyperliquid-execution-toolkit) — the production execution layer this relay routes orders through when `EXCHANGE=hyperliquid`
 - [`ict-smc-detector`](https://github.com/GitBot/ict-smc-detector) — pattern detection for ICT/SMC concepts on OHLCV data
+
+## Hire me
+
+I build and harden trading infrastructure: execution engines, exchange connectors, backtesting pipelines, and alert/webhook relays that don't drop or double-fire orders. Available for custom work and ongoing retainers around trading-infrastructure, execution, and backtesting engineering.
+
+Contact: darko.sedam@gmail.com
 
 ## License
 

@@ -166,14 +166,25 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 def main(argv: list[str] | None = None) -> None:
     """Entry point for the `tv-relay` console script.
 
-    Parses --host/--port and runs the ASGI app with uvicorn. This is what
-    `[project.scripts] tv-relay` points at; the previous version pointed
-    directly at the `app` ASGI object, which uvicorn's console-script
-    machinery cannot call as a CLI.
+    Parses --host/--port, configures logging, and runs the ASGI app with
+    uvicorn. This is what `[project.scripts] tv-relay` points at; the
+    previous version pointed directly at the `app` ASGI object, which
+    uvicorn's console-script machinery cannot call as a CLI.
+
+    Logging is configured here (INFO level, simple format) rather than at
+    import time, so that importing `tv_relay` doesn't clobber a caller's
+    own logging setup. Without this, uvicorn's own dictConfig-based logging
+    never touches the root logger, so the `tv_relay.*` INFO records this
+    module and `backends.py` log (e.g. "DRYRUN order: ...",
+    "Alert accepted: ...") would otherwise be silently dropped.
     """
     import uvicorn
 
     args = parse_args(argv)
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(levelname)s %(name)s: %(message)s",
+    )
     uvicorn.run(app, host=args.host, port=args.port)
 
 

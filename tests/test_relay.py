@@ -9,6 +9,7 @@ Covers:
 - End-to-end webhook flow with FastAPI TestClient
 """
 
+import logging
 import os
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -404,3 +405,29 @@ class TestCLI:
 
         assert calls[0]["host"] == "0.0.0.0"
         assert calls[0]["port"] == 8080
+
+    def test_main_configures_info_logging_before_running_uvicorn(self, monkeypatch):
+        """The README promises INFO log lines ("DRYRUN order: ...",
+        "Alert accepted: ...") when running `tv-relay`. Those lines are
+        emitted by the `tv_relay.*` loggers, which are plain
+        `logging.getLogger(__name__)` loggers — uvicorn's own dictConfig
+        never touches the root logger, so without an explicit
+        `logging.basicConfig(...)` call those INFO records are silently
+        dropped. This pins that `main()` configures INFO logging, and does
+        so before starting uvicorn.
+        """
+        calls = []
+
+        def fake_basic_config(**kwargs):
+            calls.append(("basicConfig", kwargs))
+
+        def fake_run(app, *, host, port):
+            calls.append(("uvicorn.run", {"host": host, "port": port}))
+
+        monkeypatch.setattr("tv_relay.server.logging.basicConfig", fake_basic_config)
+        monkeypatch.setattr("uvicorn.run", fake_run)
+
+        main(["--host", "127.0.0.1", "--port", "9002"])
+
+        assert [name for name, _ in calls] == ["basicConfig", "uvicorn.run"]
+        assert calls[0][1]["level"] == logging.INFO

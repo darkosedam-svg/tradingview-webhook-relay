@@ -7,8 +7,8 @@ configurable risk filters to an exchange backend. Today the only working
 backend is a dryrun logger — the Hyperliquid backend is a stub. See
 "Backend status" below before you point real money at this.
 
-Built for traders who run TradingView strategies and want them to execute
-live without trusting random Discord bots or paying $50/month for a
+Built for traders who run TradingView strategies and want a relay they
+control instead of trusting random Discord bots or paying $50/month for a
 black-box copy-trade service.
 
 ## Features
@@ -69,8 +69,11 @@ tv-relay --port 8080
 Or programmatically:
 
 ```python
+import logging
 import uvicorn
 from tv_relay.server import app
+
+logging.basicConfig(level=logging.INFO)  # `tv-relay` does this for you; you must do it yourself here
 uvicorn.run(app, host="0.0.0.0", port=8080)
 ```
 
@@ -115,11 +118,13 @@ curl -X POST http://localhost:8080/webhook \
   }'
 ```
 
-You should see in the relay logs:
+`tv-relay` configures INFO-level logging on startup, so you should see this
+in the relay logs (real output, from running the exact command above with
+the exact payload above):
 
 ```
-INFO  DRYRUN order: buy BTCUSDT market $100 (strategy=test, cid=4ac05f69f1a2...)
-INFO  Alert accepted: buy BTCUSDT $100 strategy=test cid=4ac05f69f1a2...
+INFO tv_relay.backends: DRYRUN order: buy BTCUSDT market $100 (strategy=test, cid=4ac05f69d10a52273aa07202e451de3c)
+INFO tv_relay.server: Alert accepted: buy BTCUSDT $100 strategy=test cid=4ac05f69d10a52273aa07202e451de3c
 ```
 
 `cid` is the first 32 hex characters of a SHA-256 hash of the order's
@@ -155,7 +160,7 @@ All config is loaded from environment variables.
 
 **4. Set a reasonable size cap.** The size cap is your last line of defense. A misconfigured TV alert (or a compromised secret) trying to fire $1M orders will hit the cap and reject.
 
-**5. Run in dryrun for at least 48 hours** before switching to a live backend. Watch the logs. Make sure every alert routes the way you expect.
+**5. Run in dryrun for at least 48 hours.** Watch the logs. Make sure every alert routes the way you expect. (There is no live backend to switch to yet — see "Backend status" above. This is future work.)
 
 ## Adding a new exchange backend
 
@@ -200,7 +205,7 @@ Add it to `DEFAULT_FILTERS` in `tv_relay/filters.py` (or pass a custom list to `
 pytest tests/
 ```
 
-33 tests should pass. The test suite covers:
+34 tests should pass. The test suite covers:
 
 - TV alert validation (Pydantic models)
 - Each filter in isolation

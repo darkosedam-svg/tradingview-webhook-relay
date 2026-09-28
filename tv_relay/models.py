@@ -28,7 +28,8 @@ class TVAlert(BaseModel):
     """Validated TradingView alert payload.
 
     Required fields:
-        secret:    Shared secret for HMAC authentication (min 8 chars).
+        secret:    Shared secret compared against the alert payload with
+                   hmac.compare_digest (min 8 chars).
         strategy:  Strategy name/ID that fired the alert.
         symbol:    Trading pair, normalised to uppercase without separators.
         side:      "buy" or "sell".

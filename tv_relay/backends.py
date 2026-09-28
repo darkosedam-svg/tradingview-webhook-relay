@@ -15,9 +15,12 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 from decimal import Decimal
 
 from .models import ExchangeOrder, OrderType, Side, TVAlert
+
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -64,9 +67,25 @@ class DryrunBackend:
 
     Use this in staging, CI, or when you want to validate the full
     pipeline without risking real funds.
+
+    Logs exactly one INFO line per accepted order, in this format::
+
+        DRYRUN order: <side> <symbol> <order_type> $<size_usd> (strategy=<strategy>, cid=<client_order_id>)
+
+    `client_order_id` is the bare hex string produced by `alert_to_order`
+    (see its docstring) — it has no "tv-" prefix.
     """
 
     async def submit(self, order: ExchangeOrder) -> dict:
+        logger.info(
+            "DRYRUN order: %s %s %s $%s (strategy=%s, cid=%s)",
+            order.side.value,
+            order.symbol,
+            order.order_type.value,
+            order.size_usd,
+            order.strategy,
+            order.client_order_id,
+        )
         return {
             "status": "dryrun",
             "client_order_id": order.client_order_id,

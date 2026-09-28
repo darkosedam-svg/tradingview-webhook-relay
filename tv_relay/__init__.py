@@ -1,4 +1,4 @@
-"""tradingview-webhook-relay — production-grade TV alert → exchange order relay."""
+"""tradingview-webhook-relay — TV alert to exchange-order relay (dry-run backend only)."""
 
 from .backends import DryrunBackend, alert_to_order, get_backend
 from .config import Config

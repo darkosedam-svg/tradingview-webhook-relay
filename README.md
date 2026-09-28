@@ -1,29 +1,44 @@
 # tradingview-webhook-relay
 
-Production-grade FastAPI relay that receives TradingView alerts and routes them through configurable risk filters to crypto exchanges.
+[![CI](https://github.com/darkosedam-svg/tradingview-webhook-relay/actions/workflows/ci.yml/badge.svg)](https://github.com/darkosedam-svg/tradingview-webhook-relay/actions/workflows/ci.yml)
 
-Built for traders who run TradingView strategies and want them to execute live without trusting random Discord bots or paying $50/month for a black-box copy-trade service.
+FastAPI relay that receives TradingView alerts and routes them through
+configurable risk filters to an exchange backend. Today the only working
+backend is a dryrun logger — the Hyperliquid backend is a stub. See
+"Backend status" below before you point real money at this.
+
+Built for traders who run TradingView strategies and want a relay they
+control instead of trusting random Discord bots or paying $50/month for a
+black-box copy-trade service.
 
 ## Features
 
-- ✅ FastAPI server, < 100ms latency overhead per alert
-- ✅ HMAC secret authentication
+- ✅ FastAPI server
+- ✅ Shared-secret authentication, compared in constant time (`hmac.compare_digest`) — not HMAC-signed request bodies, just a secret field the alert must match
 - ✅ Pluggable risk filter pipeline (size cap, symbol allowlist, strategy allowlist, trading hours)
-- ✅ Idempotent order IDs — duplicate alerts (TV retries) don't double-fill
-- ✅ Multiple exchange backends with a unified interface
-- ✅ Dryrun mode (default) — test the alert flow without risking money
-- ✅ Easy to extend — add new filters or backends in ~30 lines
+- ✅ Deterministic client order IDs — the ID is a SHA-256 hash of the alert's strategy/symbol/side/size/order_type, so a duplicate webhook delivery (TV retry) produces the same ID and an exchange can de-duplicate it
+- ✅ Dryrun mode (default) — logs the order and returns a fake response; no exchange is called
+- ⚠️ Hyperliquid backend is a stub — `HyperliquidBackend.submit()` raises `NotImplementedError` today
+
+## Backend status
+
+| Backend | Status |
+|---|---|
+| `dryrun` | Works. Validates the alert, runs risk filters, logs and returns the constructed order. No exchange call. |
+| `hyperliquid` | Not implemented. Selecting `EXCHANGE=hyperliquid` gets you a 501 on every webhook until `HyperliquidBackend.submit()` is wired up to `hyperliquid-execution-toolkit` (which itself is early-stage — see that repo). |
 
 ## Install
 
+Not on PyPI yet. Install from GitHub:
+
 ```bash
-pip install tradingview-webhook-relay
+pip install "git+https://github.com/darkosedam-svg/tradingview-webhook-relay.git"
 ```
 
 Or from source:
 
 ```bash
-git clone https://github.com/GitBot/tradingview-webhook-relay
+git clone https://github.com/darkosedam-svg/tradingview-webhook-relay
 cd tradingview-webhook-relay
 pip install -e .[dev]
 ```
@@ -54,8 +69,11 @@ tv-relay --port 8080
 Or programmatically:
 
 ```python
+import logging
 import uvicorn
 from tv_relay.server import app
+
+logging.basicConfig(level=logging.INFO)  # `tv-relay` does this for you; you must do it yourself here
 uvicorn.run(app, host="0.0.0.0", port=8080)
 ```
 
@@ -84,6 +102,8 @@ Set the alert message to JSON:
 
 TV will substitute `{{strategy.order.action}}` with `buy` or `sell` automatically. Other [TV alert variables](https://www.tradingview.com/support/solutions/43000531021) work in any field.
 
+Note: `stop_loss_pct` and `take_profit_pct` above are accepted (the model allows extra fields) but currently **ignored** — there is no SL/TP logic in the relay or the dryrun backend yet. Include them in your alert if you want, but don't rely on them doing anything.
+
 ### 4. Test the flow
 
 ```bash
@@ -98,14 +118,22 @@ curl -X POST http://localhost:8080/webhook \
   }'
 ```
 
-You should see in the relay logs:
+`tv-relay` configures INFO-level logging on startup, so you should see this
+in the relay logs (real output, from running the exact command above with
+the exact payload above):
 
 ```
-INFO  Alert accepted: buy BTCUSDT $100 strategy=test cid=tv-...
-INFO  DRYRUN order: BUY BTCUSDT market $100 (strategy=test, cid=tv-...)
+INFO tv_relay.backends: DRYRUN order: buy BTCUSDT market $100 (strategy=test, cid=4ac05f69d10a52273aa07202e451de3c)
+INFO tv_relay.server: Alert accepted: buy BTCUSDT $100 strategy=test cid=4ac05f69d10a52273aa07202e451de3c
 ```
 
-In dryrun mode no real order is sent — only logged. When you're ready, switch `EXCHANGE` to a real backend.
+`cid` is the first 32 hex characters of a SHA-256 hash of the order's
+strategy/symbol/side/size/order_type — a bare hex string, not prefixed with
+`tv-`.
+
+In dryrun mode no real order is sent — only logged. Dryrun is the only
+backend that works today; there is no real exchange backend to switch to
+yet (see "Backend status" above).
 
 ## Configuration reference
 
@@ -121,12 +149,10 @@ All config is loaded from environment variables.
 | `ALLOWED_STRATEGIES` | | (all) | Comma-separated strategy allowlist |
 | `ALLOWED_HOURS_UTC_START` | | `0` | Trading window start hour (UTC) |
 | `ALLOWED_HOURS_UTC_END` | | `24` | Trading window end hour (UTC) |
-| `TELEGRAM_BOT_TOKEN` | | — | Optional: notify on each accepted alert |
-| `TELEGRAM_CHAT_ID` | | — | Optional: chat to notify |
 
 ## Security notes
 
-**1. The secret matters.** Generate it with `openssl rand -hex 32`. Don't commit it to git.
+**1. The secret matters.** This is a shared secret compared with `hmac.compare_digest` (constant-time, to avoid timing attacks) — it is not a signed payload, so anyone who has the secret can fire alerts. Generate it with `openssl rand -hex 32`. Don't commit it to git.
 
 **2. Use HTTPS in production.** Webhook URLs go through TradingView's servers; HTTP traffic is observable.
 
@@ -134,7 +160,7 @@ All config is loaded from environment variables.
 
 **4. Set a reasonable size cap.** The size cap is your last line of defense. A misconfigured TV alert (or a compromised secret) trying to fire $1M orders will hit the cap and reject.
 
-**5. Run in dryrun for at least 48 hours** before switching to a live backend. Watch the logs. Make sure every alert routes the way you expect.
+**5. Run in dryrun for at least 48 hours.** Watch the logs. Make sure every alert routes the way you expect. (There is no live backend to switch to yet — see "Backend status" above. This is future work.)
 
 ## Adding a new exchange backend
 
@@ -179,7 +205,7 @@ Add it to `DEFAULT_FILTERS` in `tv_relay/filters.py` (or pass a custom list to `
 pytest tests/
 ```
 
-27 tests should pass. The test suite covers:
+34 tests should pass. The test suite covers:
 
 - TV alert validation (Pydantic models)
 - Each filter in isolation
@@ -187,6 +213,8 @@ pytest tests/
 - Order ID determinism (idempotency on TV retries)
 - Authentication
 - End-to-end webhook flow
+- The dryrun backend's log line
+- The `tv-relay` CLI's argument parsing and entry point
 
 ## What this library is NOT
 
@@ -197,8 +225,14 @@ pytest tests/
 
 ## Related projects
 
-- [`hyperliquid-execution-toolkit`](https://github.com/GitBot/hyperliquid-execution-toolkit) — the production execution layer this relay routes orders through when `EXCHANGE=hyperliquid`
-- [`ict-smc-detector`](https://github.com/GitBot/ict-smc-detector) — pattern detection for ICT/SMC concepts on OHLCV data
+- [`hyperliquid-execution-toolkit`](https://github.com/darkosedam-svg/hyperliquid-execution-toolkit) — the execution layer this relay is meant to route orders through when `EXCHANGE=hyperliquid`; note that both the relay's Hyperliquid backend and much of that toolkit's client are still unimplemented
+- [`ict-smc-detector`](https://github.com/darkosedam-svg/ict-smc-detector) — pattern detection for ICT/SMC concepts on OHLCV data
+
+## Hire me
+
+I build and harden trading infrastructure: execution engines, exchange connectors, backtesting pipelines, and alert/webhook relays. Available for custom work and ongoing retainers around trading-infrastructure, execution, and backtesting engineering.
+
+Contact: jessuskrist84@gmail.com
 
 ## License
 
@@ -206,10 +240,9 @@ MIT.
 
 ## Author
 
-Darko Kovačić — independent algo-trading systems engineer. I build production execution infrastructure for crypto perps and DEXs.
+Darko Vlahovic — independent algo-trading systems engineer.
 
-- 🌐 [Website](https://jessuskrist84.github.io)
-- 🐦 [Twitter](https://twitter.com/jessuskrist84)
-- ✉️ [Email](jessuskrist84@gmail.com)
+- 🌐 [github.com/darkosedam-svg](https://github.com/darkosedam-svg)
+- ✉️ [Email](mailto:jessuskrist84@gmail.com)
 
-Available for paid work — custom strategy implementation, backend integration, full TV-to-exchange systems. Free 30-min diagnosis on any existing webhook setup.
+Available for paid work — custom strategy implementation, backend integration, full TV-to-exchange systems.

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import hmac
 import logging
 from contextlib import asynccontextmanager
@@ -39,7 +40,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="TradingView Webhook Relay",
         version="1.0.0",
-        description="Production-grade relay from TV alerts to crypto exchanges",
+        description="Relay from TV alerts to crypto exchanges — dry-run backend only",
         lifespan=lifespan,
     )
 
@@ -140,3 +141,52 @@ def create_app() -> FastAPI:
 
 
 app = create_app()
+
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    """Parse CLI arguments for the `tv-relay` console script."""
+    parser = argparse.ArgumentParser(
+        prog="tv-relay",
+        description="Run the TradingView webhook relay with uvicorn.",
+    )
+    parser.add_argument(
+        "--host",
+        default="0.0.0.0",
+        help="Interface to bind to (default: 0.0.0.0).",
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=8080,
+        help="Port to listen on (default: 8080).",
+    )
+    return parser.parse_args(argv)
+
+
+def main(argv: list[str] | None = None) -> None:
+    """Entry point for the `tv-relay` console script.
+
+    Parses --host/--port, configures logging, and runs the ASGI app with
+    uvicorn. This is what `[project.scripts] tv-relay` points at; the
+    previous version pointed directly at the `app` ASGI object, which
+    uvicorn's console-script machinery cannot call as a CLI.
+
+    Logging is configured here (INFO level, simple format) rather than at
+    import time, so that importing `tv_relay` doesn't clobber a caller's
+    own logging setup. Without this, uvicorn's own dictConfig-based logging
+    never touches the root logger, so the `tv_relay.*` INFO records this
+    module and `backends.py` log (e.g. "DRYRUN order: ...",
+    "Alert accepted: ...") would otherwise be silently dropped.
+    """
+    import uvicorn
+
+    args = parse_args(argv)
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(levelname)s %(name)s: %(message)s",
+    )
+    uvicorn.run(app, host=args.host, port=args.port)
+
+
+if __name__ == "__main__":
+    main()

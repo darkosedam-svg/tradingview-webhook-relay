@@ -9,6 +9,7 @@ Covers:
 - End-to-end webhook flow with FastAPI TestClient
 """
 
+import logging
 import os
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -29,7 +30,7 @@ from tv_relay.filters import (
     run_filters,
 )
 from tv_relay.models import OrderType, Side, TVAlert
-from tv_relay.server import create_app
+from tv_relay.server import create_app, main, parse_args
 
 
 def make_alert(**overrides) -> TVAlert:
@@ -241,6 +242,26 @@ class TestDryrunBackend:
         assert response["status"] == "dryrun"
         assert response["client_order_id"] == order.client_order_id
 
+    async def test_dryrun_logs_one_clear_line_per_order(self, caplog):
+        """DryrunBackend.submit must log exactly one INFO line documenting
+        the accepted order, in the format the README promises."""
+        backend = DryrunBackend()
+        alert = make_alert()
+        order = alert_to_order(alert)
+        with caplog.at_level("INFO", logger="tv_relay.backends"):
+            await backend.submit(order)
+
+        relay_records = [r for r in caplog.records if r.name == "tv_relay.backends"]
+        assert len(relay_records) == 1
+        message = relay_records[0].getMessage()
+        assert message.startswith("DRYRUN order:")
+        assert order.side.value in message
+        assert order.symbol in message
+        assert order.order_type.value in message
+        assert str(order.size_usd) in message
+        assert order.strategy in message
+        assert f"cid={order.client_order_id}" in message
+
 
 # -----------------------------------------------------------------------------
 # End-to-end webhook flow
@@ -331,3 +352,82 @@ class TestWebhookEndpoint:
         r1 = client.post("/webhook", json=payload)
         r2 = client.post("/webhook", json=payload)
         assert r1.json()["client_order_id"] == r2.json()["client_order_id"]
+
+
+# -----------------------------------------------------------------------------
+# CLI entry point (`tv-relay` console script -> tv_relay.server:main)
+# -----------------------------------------------------------------------------
+
+class TestCLI:
+    def test_parse_args_defaults(self):
+        args = parse_args([])
+        assert args.host == "0.0.0.0"
+        assert args.port == 8080
+
+    def test_parse_args_overrides(self):
+        args = parse_args(["--host", "127.0.0.1", "--port", "9000"])
+        assert args.host == "127.0.0.1"
+        assert args.port == 9000
+
+    def test_parse_args_port_is_int(self):
+        args = parse_args(["--port", "3000"])
+        assert isinstance(args.port, int)
+        assert args.port == 3000
+
+    def test_main_runs_uvicorn_with_parsed_args(self, monkeypatch):
+        """Smoke test of the `tv-relay` entry point itself: this is the
+        console script pyproject.toml points at, so it must actually be
+        callable with no arguments and must not crash the way the old
+        `tv_relay.server:app` target did (TypeError on ASGI __call__).
+        """
+        calls = []
+
+        def fake_run(app, *, host, port):
+            calls.append({"app": app, "host": host, "port": port})
+
+        monkeypatch.setattr("uvicorn.run", fake_run)
+
+        main(["--host", "127.0.0.1", "--port", "9001"])
+
+        assert len(calls) == 1
+        assert calls[0]["host"] == "127.0.0.1"
+        assert calls[0]["port"] == 9001
+
+    def test_main_defaults_with_no_args(self, monkeypatch):
+        calls = []
+
+        def fake_run(app, *, host, port):
+            calls.append({"app": app, "host": host, "port": port})
+
+        monkeypatch.setattr("uvicorn.run", fake_run)
+
+        main([])
+
+        assert calls[0]["host"] == "0.0.0.0"
+        assert calls[0]["port"] == 8080
+
+    def test_main_configures_info_logging_before_running_uvicorn(self, monkeypatch):
+        """The README promises INFO log lines ("DRYRUN order: ...",
+        "Alert accepted: ...") when running `tv-relay`. Those lines are
+        emitted by the `tv_relay.*` loggers, which are plain
+        `logging.getLogger(__name__)` loggers — uvicorn's own dictConfig
+        never touches the root logger, so without an explicit
+        `logging.basicConfig(...)` call those INFO records are silently
+        dropped. This pins that `main()` configures INFO logging, and does
+        so before starting uvicorn.
+        """
+        calls = []
+
+        def fake_basic_config(**kwargs):
+            calls.append(("basicConfig", kwargs))
+
+        def fake_run(app, *, host, port):
+            calls.append(("uvicorn.run", {"host": host, "port": port}))
+
+        monkeypatch.setattr("tv_relay.server.logging.basicConfig", fake_basic_config)
+        monkeypatch.setattr("uvicorn.run", fake_run)
+
+        main(["--host", "127.0.0.1", "--port", "9002"])
+
+        assert [name for name, _ in calls] == ["basicConfig", "uvicorn.run"]
+        assert calls[0][1]["level"] == logging.INFO

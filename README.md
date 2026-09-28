@@ -2,30 +2,43 @@
 
 [![CI](https://github.com/darkosedam-svg/tradingview-webhook-relay/actions/workflows/ci.yml/badge.svg)](https://github.com/darkosedam-svg/tradingview-webhook-relay/actions/workflows/ci.yml)
 
-Production-grade FastAPI relay that receives TradingView alerts and routes them through configurable risk filters to crypto exchanges.
+FastAPI relay that receives TradingView alerts and routes them through
+configurable risk filters to an exchange backend. Today the only working
+backend is a dryrun logger — the Hyperliquid backend is a stub. See
+"Backend status" below before you point real money at this.
 
-Built for traders who run TradingView strategies and want them to execute live without trusting random Discord bots or paying $50/month for a black-box copy-trade service.
+Built for traders who run TradingView strategies and want them to execute
+live without trusting random Discord bots or paying $50/month for a
+black-box copy-trade service.
 
 ## Features
 
-- ✅ FastAPI server, < 100ms latency overhead per alert
-- ✅ HMAC secret authentication
+- ✅ FastAPI server
+- ✅ Shared-secret authentication, compared in constant time (`hmac.compare_digest`) — not HMAC-signed request bodies, just a secret field the alert must match
 - ✅ Pluggable risk filter pipeline (size cap, symbol allowlist, strategy allowlist, trading hours)
-- ✅ Idempotent order IDs — duplicate alerts (TV retries) don't double-fill
-- ✅ Multiple exchange backends with a unified interface
-- ✅ Dryrun mode (default) — test the alert flow without risking money
-- ✅ Easy to extend — add new filters or backends in ~30 lines
+- ✅ Deterministic client order IDs — the ID is a SHA-256 hash of the alert's strategy/symbol/side/size/order_type, so a duplicate webhook delivery (TV retry) produces the same ID and an exchange can de-duplicate it
+- ✅ Dryrun mode (default) — logs the order and returns a fake response; no exchange is called
+- ⚠️ Hyperliquid backend is a stub — `HyperliquidBackend.submit()` raises `NotImplementedError` today
+
+## Backend status
+
+| Backend | Status |
+|---|---|
+| `dryrun` | Works. Validates the alert, runs risk filters, logs and returns the constructed order. No exchange call. |
+| `hyperliquid` | Not implemented. Selecting `EXCHANGE=hyperliquid` gets you a 501 on every webhook until `HyperliquidBackend.submit()` is wired up to `hyperliquid-execution-toolkit` (which itself is early-stage — see that repo). |
 
 ## Install
 
+Not on PyPI yet. Install from GitHub:
+
 ```bash
-pip install tradingview-webhook-relay
+pip install "git+https://github.com/darkosedam-svg/tradingview-webhook-relay.git"
 ```
 
 Or from source:
 
 ```bash
-git clone https://github.com/GitBot/tradingview-webhook-relay
+git clone https://github.com/darkosedam-svg/tradingview-webhook-relay
 cd tradingview-webhook-relay
 pip install -e .[dev]
 ```
@@ -128,7 +141,7 @@ All config is loaded from environment variables.
 
 ## Security notes
 
-**1. The secret matters.** Generate it with `openssl rand -hex 32`. Don't commit it to git.
+**1. The secret matters.** This is a shared secret compared with `hmac.compare_digest` (constant-time, to avoid timing attacks) — it is not a signed payload, so anyone who has the secret can fire alerts. Generate it with `openssl rand -hex 32`. Don't commit it to git.
 
 **2. Use HTTPS in production.** Webhook URLs go through TradingView's servers; HTTP traffic is observable.
 
@@ -199,14 +212,14 @@ pytest tests/
 
 ## Related projects
 
-- [`hyperliquid-execution-toolkit`](https://github.com/GitBot/hyperliquid-execution-toolkit) — the production execution layer this relay routes orders through when `EXCHANGE=hyperliquid`
-- [`ict-smc-detector`](https://github.com/GitBot/ict-smc-detector) — pattern detection for ICT/SMC concepts on OHLCV data
+- [`hyperliquid-execution-toolkit`](https://github.com/darkosedam-svg/hyperliquid-execution-toolkit) — the execution layer this relay is meant to route orders through when `EXCHANGE=hyperliquid`; note that both the relay's Hyperliquid backend and much of that toolkit's client are still unimplemented
+- [`ict-smc-detector`](https://github.com/darkosedam-svg/ict-smc-detector) — pattern detection for ICT/SMC concepts on OHLCV data
 
 ## Hire me
 
-I build and harden trading infrastructure: execution engines, exchange connectors, backtesting pipelines, and alert/webhook relays that don't drop or double-fire orders. Available for custom work and ongoing retainers around trading-infrastructure, execution, and backtesting engineering.
+I build and harden trading infrastructure: execution engines, exchange connectors, backtesting pipelines, and alert/webhook relays. Available for custom work and ongoing retainers around trading-infrastructure, execution, and backtesting engineering.
 
-Contact: darko.sedam@gmail.com
+Contact: jessuskrist84@gmail.com
 
 ## License
 
@@ -214,10 +227,9 @@ MIT.
 
 ## Author
 
-Darko Kovačić — independent algo-trading systems engineer. I build production execution infrastructure for crypto perps and DEXs.
+Darko Vlahovic — independent algo-trading systems engineer.
 
-- 🌐 [Website](https://jessuskrist84.github.io)
-- 🐦 [Twitter](https://twitter.com/jessuskrist84)
-- ✉️ [Email](jessuskrist84@gmail.com)
+- 🌐 [github.com/darkosedam-svg](https://github.com/darkosedam-svg)
+- ✉️ [Email](mailto:jessuskrist84@gmail.com)
 
-Available for paid work — custom strategy implementation, backend integration, full TV-to-exchange systems. Free 30-min diagnosis on any existing webhook setup.
+Available for paid work — custom strategy implementation, backend integration, full TV-to-exchange systems.

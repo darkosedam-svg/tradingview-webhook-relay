@@ -9,7 +9,7 @@ description = "Production-grade FastAPI relay from TradingView alerts to crypto 
 readme = "README.md"
 license = { text = "MIT" }
 authors = [
-    { name = "Darko Kovačić", email = "jessuskrist84@gmail.com" }
+    { name = "Darko Vlahovic", email = "jessuskrist84@gmail.com" }
 ]
 keywords = ["tradingview", "webhook", "fastapi", "trading", "crypto", "hyperliquid"]
 classifiers = [
@@ -42,9 +42,9 @@ dev = [
 tv-relay = "tv_relay.server:app"
 
 [project.urls]
-Homepage = "https://github.com/GitBot/tradingview-webhook-relay"
-Repository = "https://github.com/GitBot/tradingview-webhook-relay"
-Issues = "https://github.com/GitBot/tradingview-webhook-relay/issues"
+Homepage = "https://github.com/darkosedam-svg/tradingview-webhook-relay"
+Repository = "https://github.com/darkosedam-svg/tradingview-webhook-relay"
+Issues = "https://github.com/darkosedam-svg/tradingview-webhook-relay/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["tv_relay"]

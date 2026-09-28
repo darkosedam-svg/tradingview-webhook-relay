@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "tradingview-webhook-relay"
 version = "1.0.0"
-description = "Production-grade FastAPI relay from TradingView alerts to crypto exchange orders"
+description = "FastAPI relay from TradingView alerts to exchange orders — risk filters plus a dry-run backend; no live exchange backend yet"
 readme = "README.md"
 license = { text = "MIT" }
 authors = [
@@ -13,7 +13,7 @@ authors = [
 ]
 keywords = ["tradingview", "webhook", "fastapi", "trading", "crypto", "hyperliquid"]
 classifiers = [
-    "Development Status :: 4 - Beta",
+    "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
@@ -39,7 +39,7 @@ dev = [
 ]
 
 [project.scripts]
-tv-relay = "tv_relay.server:app"
+tv-relay = "tv_relay.server:main"
 
 [project.urls]
 Homepage = "https://github.com/darkosedam-svg/tradingview-webhook-relay"

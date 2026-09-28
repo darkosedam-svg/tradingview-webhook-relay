@@ -99,6 +99,8 @@ Set the alert message to JSON:
 
 TV will substitute `{{strategy.order.action}}` with `buy` or `sell` automatically. Other [TV alert variables](https://www.tradingview.com/support/solutions/43000531021) work in any field.
 
+Note: `stop_loss_pct` and `take_profit_pct` above are accepted (the model allows extra fields) but currently **ignored** — there is no SL/TP logic in the relay or the dryrun backend yet. Include them in your alert if you want, but don't rely on them doing anything.
+
 ### 4. Test the flow
 
 ```bash
@@ -116,11 +118,17 @@ curl -X POST http://localhost:8080/webhook \
 You should see in the relay logs:
 
 ```
-INFO  Alert accepted: buy BTCUSDT $100 strategy=test cid=tv-...
-INFO  DRYRUN order: BUY BTCUSDT market $100 (strategy=test, cid=tv-...)
+INFO  DRYRUN order: buy BTCUSDT market $100 (strategy=test, cid=4ac05f69f1a2...)
+INFO  Alert accepted: buy BTCUSDT $100 strategy=test cid=4ac05f69f1a2...
 ```
 
-In dryrun mode no real order is sent — only logged. When you're ready, switch `EXCHANGE` to a real backend.
+`cid` is the first 32 hex characters of a SHA-256 hash of the order's
+strategy/symbol/side/size/order_type — a bare hex string, not prefixed with
+`tv-`.
+
+In dryrun mode no real order is sent — only logged. Dryrun is the only
+backend that works today; there is no real exchange backend to switch to
+yet (see "Backend status" above).
 
 ## Configuration reference
 
@@ -136,8 +144,6 @@ All config is loaded from environment variables.
 | `ALLOWED_STRATEGIES` | | (all) | Comma-separated strategy allowlist |
 | `ALLOWED_HOURS_UTC_START` | | `0` | Trading window start hour (UTC) |
 | `ALLOWED_HOURS_UTC_END` | | `24` | Trading window end hour (UTC) |
-| `TELEGRAM_BOT_TOKEN` | | — | Optional: notify on each accepted alert |
-| `TELEGRAM_CHAT_ID` | | — | Optional: chat to notify |
 
 ## Security notes
 
@@ -194,7 +200,7 @@ Add it to `DEFAULT_FILTERS` in `tv_relay/filters.py` (or pass a custom list to `
 pytest tests/
 ```
 
-27 tests should pass. The test suite covers:
+33 tests should pass. The test suite covers:
 
 - TV alert validation (Pydantic models)
 - Each filter in isolation
@@ -202,6 +208,8 @@ pytest tests/
 - Order ID determinism (idempotency on TV retries)
 - Authentication
 - End-to-end webhook flow
+- The dryrun backend's log line
+- The `tv-relay` CLI's argument parsing and entry point
 
 ## What this library is NOT
 

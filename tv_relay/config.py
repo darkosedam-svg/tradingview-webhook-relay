@@ -5,7 +5,9 @@ All settings are read from environment variables so the relay is
 
 Environment Variables
 ---------------------
-TV_WEBHOOK_SECRET       Required — shared secret for HMAC authentication.
+TV_WEBHOOK_SECRET       Required — shared secret checked with hmac.compare_digest
+                        (constant-time comparison of a plain secret field,
+                        not an HMAC-signed request body).
 EXCHANGE                Exchange backend to use (default: "dryrun").
 MAX_POSITION_SIZE_USD   Maximum allowed position size per alert (default: 10000).
 MAX_DAILY_LOSS_USD      Daily loss cap before circuit-breaker trips (default: 1000).
